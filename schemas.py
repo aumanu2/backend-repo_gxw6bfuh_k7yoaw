@@ -1,48 +1,47 @@
 """
-Database Schemas
+Database Schemas for Startup Lawyer App
 
-Define your MongoDB collection schemas here using Pydantic models.
-These schemas are used for data validation in your application.
-
-Each Pydantic model represents a collection in your database.
-Model name is converted to lowercase for the collection name:
-- User -> "user" collection
-- Product -> "product" collection
-- BlogPost -> "blogs" collection
+Each Pydantic model corresponds to a MongoDB collection. The collection name is the lowercase of the class name.
 """
+from typing import Optional, List, Dict
+from pydantic import BaseModel, Field, EmailStr
+from datetime import date
 
-from pydantic import BaseModel, Field
-from typing import Optional
+class Client(BaseModel):
+    name: str = Field(..., description="Client or company name")
+    email: Optional[EmailStr] = Field(None, description="Primary contact email")
+    phone: Optional[str] = Field(None, description="Primary contact phone")
+    company_type: Optional[str] = Field(None, description="LLC, C-Corp, S-Corp, etc.")
+    jurisdiction: Optional[str] = Field(None, description="State or country of formation")
+    founders: Optional[List[Dict]] = Field(default_factory=list, description="List of founders with roles and ownership")
 
-# Example schemas (replace with your own):
+class Matter(BaseModel):
+    client_id: str = Field(..., description="Associated client id")
+    title: str = Field(..., description="Matter title, e.g., Incorporation, Fundraise, IP Assignment")
+    status: str = Field("open", description="open, in_progress, closed")
+    description: Optional[str] = Field(None, description="Matter description")
+    tags: Optional[List[str]] = Field(default_factory=list)
 
-class User(BaseModel):
-    """
-    Users collection schema
-    Collection name: "user" (lowercase of class name)
-    """
-    name: str = Field(..., description="Full name")
-    email: str = Field(..., description="Email address")
-    address: str = Field(..., description="Address")
-    age: Optional[int] = Field(None, ge=0, le=120, description="Age in years")
-    is_active: bool = Field(True, description="Whether user is active")
+class DocumentTemplate(BaseModel):
+    name: str = Field(..., description="Template name, e.g., Mutual NDA")
+    category: str = Field("contract", description="contract, corporate, hr, privacy, etc.")
+    variables: List[str] = Field(default_factory=list, description="List of variable placeholders used in template body")
+    body: str = Field(..., description="Template body text with {placeholders}")
 
-class Product(BaseModel):
-    """
-    Products collection schema
-    Collection name: "product" (lowercase of class name)
-    """
-    title: str = Field(..., description="Product title")
-    description: Optional[str] = Field(None, description="Product description")
-    price: float = Field(..., ge=0, description="Price in dollars")
-    category: str = Field(..., description="Product category")
-    in_stock: bool = Field(True, description="Whether product is in stock")
+class Document(BaseModel):
+    client_id: Optional[str] = Field(None, description="Client id if applicable")
+    matter_id: Optional[str] = Field(None, description="Matter id if applicable")
+    title: str = Field(..., description="Document title")
+    category: str = Field("contract")
+    content: str = Field(..., description="Generated document text/content")
+    template_id: Optional[str] = Field(None, description="Source template id")
+    variables: Optional[Dict[str, str]] = Field(default_factory=dict, description="Variables used for generation")
 
-# Add your own schemas here:
-# --------------------------------------------------
-
-# Note: The Flames database viewer will automatically:
-# 1. Read these schemas from GET /schema endpoint
-# 2. Use them for document validation when creating/editing
-# 3. Handle all database operations (CRUD) directly
-# 4. You don't need to create any database endpoints!
+class Task(BaseModel):
+    client_id: Optional[str] = None
+    matter_id: Optional[str] = None
+    title: str
+    status: str = Field("todo", description="todo, in_progress, done")
+    due_date: Optional[date] = None
+    assignee: Optional[str] = None
+    notes: Optional[str] = None
