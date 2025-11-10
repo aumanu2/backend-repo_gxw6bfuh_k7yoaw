@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from typing import Dict, Any, List
 from database import create_document, get_documents
 
-app = FastAPI(title="Startup Lawyer API", version="1.0.0")
+app = FastAPI(title="Startup Lawyer API", version="1.0.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -55,34 +55,8 @@ def test_database():
     response["database_name"] = "✅ Set" if os.getenv("DATABASE_NAME") else "❌ Not Set"
     return response
 
-# ---------- Schemas-powered endpoints ----------
+# ---------- Feature-specific endpoints (declare BEFORE dynamic routes) ----------
 
-# Generic create route based on schema/collection name
-class CreatePayload(BaseModel):
-    data: Dict[str, Any]
-
-@app.post("/api/{collection}")
-def create_item(collection: str, payload: CreatePayload):
-    try:
-        new_id = create_document(collection, payload.data)
-        return {"id": new_id}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.get("/api/{collection}")
-def list_items(collection: str, limit: int = 50):
-    try:
-        docs = get_documents(collection, limit=limit)
-        # Convert ObjectId to string where present
-        result: List[Dict[str, Any]] = []
-        for d in docs:
-            d["_id"] = str(d.get("_id"))
-            result.append(d)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-# Helpful presets for the Startup Lawyer app
 @app.get("/api/templates/defaults")
 def default_templates():
     # A few starter templates with variables
@@ -115,10 +89,16 @@ def default_templates():
         }
     ]
 
+class GeneratePayload(BaseModel):
+    template: Dict[str, Any]
+    variables: Dict[str, Any]
+
 @app.post("/api/generate")
-def generate_document(template: Dict[str, Any], variables: Dict[str, Any]):
+def generate_document(payload: GeneratePayload):
     """Simple server-side merge of variables into a template body, persisted as a document"""
     try:
+        template = payload.template
+        variables = payload.variables
         body = template.get("body", "")
         filled = body.format(**variables)
         doc = {
@@ -132,6 +112,32 @@ def generate_document(template: Dict[str, Any], variables: Dict[str, Any]):
         return {"id": new_id, "content": filled}
     except KeyError as e:
         raise HTTPException(status_code=400, detail=f"Missing variable: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+# ---------- Generic CRUD routes (moved under a distinct prefix to avoid conflicts) ----------
+
+class CreatePayload(BaseModel):
+    data: Dict[str, Any]
+
+@app.post("/api/collections/{collection}")
+def create_item(collection: str, payload: CreatePayload):
+    try:
+        new_id = create_document(collection, payload.data)
+        return {"id": new_id}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/collections/{collection}")
+def list_items(collection: str, limit: int = 50):
+    try:
+        docs = get_documents(collection, limit=limit)
+        # Convert ObjectId to string where present
+        result: List[Dict[str, Any]] = []
+        for d in docs:
+            d["_id"] = str(d.get("_id"))
+            result.append(d)
+        return result
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
